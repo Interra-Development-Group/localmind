@@ -111,7 +111,11 @@ function renderContent(text: string, isUser: boolean): ReactNode {
 
   while ((match = codeRe.exec(text)) !== null) {
     if (match.index > last) {
-      nodes.push(renderBlock(text.slice(last, match.index), isUser, `pre-${match.index}`))
+      nodes.push(
+        <span key={`pre-${match.index}`}>
+          {renderBlock(text.slice(last, match.index), isUser, `pre-${match.index}`)}
+        </span>
+      )
     }
     const lang = match[1]
     const code = match[2].replace(/^\n/, "").replace(/\n$/, "")
@@ -128,7 +132,11 @@ function renderContent(text: string, isUser: boolean): ReactNode {
   }
 
   if (last < text.length) {
-    nodes.push(renderBlock(text.slice(last), isUser, `post-${last}`))
+    nodes.push(
+      <span key={`post-${last}`}>
+        {renderBlock(text.slice(last), isUser, `post-${last}`)}
+      </span>
+    )
   }
 
   return <>{nodes}</>

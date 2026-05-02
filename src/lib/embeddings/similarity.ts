@@ -11,6 +11,7 @@ export interface ScoredChunk {
   title: string
   chunk: string
   score: number
+  belowThreshold?: boolean
 }
 
 // ─── Cosine Similarity ────────────────────────────────────────────────────────
@@ -50,29 +51,32 @@ export async function semanticSearch(
   query: string,
   snapshots: PageSnapshot[]
 ): Promise<ScoredChunk[]> {
+  const searchable = snapshots.filter((s) => s.embeddings.length > 0)
+  console.log(`[Search] ${searchable.length}/${snapshots.length} snapshots have embeddings, threshold=${SIMILARITY_THRESHOLD}`)
+
+  if (searchable.length === 0) return []
+
   const queryEmbedding = await generateQueryEmbedding(query)
-  const results: ScoredChunk[] = []
+  const all: ScoredChunk[] = []
 
-  for (const snapshot of snapshots) {
-    // Compare query embedding against each chunk embedding
+  for (const snapshot of searchable) {
     for (let i = 0; i < snapshot.embeddings.length; i++) {
-      const chunkEmbedding = snapshot.embeddings[i]
-      const score = cosineSimilarity(queryEmbedding, chunkEmbedding)
-
-      if (score >= SIMILARITY_THRESHOLD) {
-        results.push({
-          url: snapshot.url,
-          title: snapshot.title,
-          chunk: snapshot.chunks[i],
-          score
-        })
-      }
+      const score = cosineSimilarity(queryEmbedding, snapshot.embeddings[i])
+      all.push({ url: snapshot.url, title: snapshot.title, chunk: snapshot.chunks[i], score })
     }
   }
 
-  // Sort by score descending and take top results
-  results.sort((a, b) => b.score - a.score)
-  return results.slice(0, MAX_CONTEXT_CHUNKS)
+  all.sort((a, b) => b.score - a.score)
+
+  const aboveThreshold = all.filter((r) => r.score >= SIMILARITY_THRESHOLD)
+  console.log(`[Search] ${aboveThreshold.length} results above threshold, best score=${all[0]?.score.toFixed(3) ?? "n/a"}`)
+
+  if (aboveThreshold.length > 0) {
+    return aboveThreshold.slice(0, MAX_CONTEXT_CHUNKS)
+  }
+
+  // Nothing above threshold — return top-3 best matches flagged as low confidence
+  return all.slice(0, 3).map((r) => ({ ...r, belowThreshold: true }))
 }
 
 // ─── Find best matching chunk ─────────────────────────────────────────────────

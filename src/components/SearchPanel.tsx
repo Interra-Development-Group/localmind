@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { getAllSnapshots } from "~/lib/storage/snapshots"
 import { semanticSearch } from "~/lib/embeddings/similarity"
 import type { ScoredChunk } from "~/lib/embeddings/similarity"
@@ -9,6 +9,16 @@ export function SearchPanel() {
   const [searching, setSearching] = useState(false)
   const [searched, setSearched] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [indexStats, setIndexStats] = useState<{ total: number; searchable: number } | null>(null)
+
+  useEffect(() => {
+    getAllSnapshots().then((snaps) => {
+      setIndexStats({
+        total: snaps.length,
+        searchable: snaps.filter((s) => s.embeddings.length > 0).length
+      })
+    }).catch(() => {})
+  }, [])
 
   const handleSearch = async () => {
     if (!query.trim()) return
@@ -16,6 +26,10 @@ export function SearchPanel() {
     setError(null)
     try {
       const snapshots = await getAllSnapshots()
+      setIndexStats({
+        total: snapshots.length,
+        searchable: snapshots.filter((s) => s.embeddings.length > 0).length
+      })
       const hits = await semanticSearch(query, snapshots)
       setResults(hits)
       setSearched(true)
@@ -53,11 +67,20 @@ export function SearchPanel() {
             ) : "Search"}
           </button>
         </div>
-        {searched && !error && (
-          <p className="mt-1.5 text-[10px] text-slate-400">
-            {results.length === 0 ? "No matching content found." : `${results.length} result${results.length === 1 ? "" : "s"}`}
-          </p>
-        )}
+        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+          {indexStats !== null && (
+            <span className="text-[10px] text-slate-400">
+              {indexStats.searchable === 0
+                ? "No pages indexed yet — crawl some favorites first."
+                : `${indexStats.searchable} of ${indexStats.total} page${indexStats.total === 1 ? "" : "s"} searchable`}
+            </span>
+          )}
+          {searched && !error && (
+            <span className="text-[10px] text-slate-400">
+              · {results.length === 0 ? "No results." : `${results.length} result${results.length === 1 ? "" : "s"}`}
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
@@ -78,12 +101,27 @@ export function SearchPanel() {
         {results.map((r, i) => {
           const domain = (() => { try { return new URL(r.url).hostname } catch { return r.url } })()
           return (
-            <div key={i} className="border border-slate-200 rounded-lg p-3 space-y-1.5 hover:border-indigo-200 transition-colors">
+            <div key={i} className={`border rounded-lg p-3 space-y-1.5 transition-colors ${
+              r.belowThreshold
+                ? "border-amber-200 hover:border-amber-300 bg-amber-50/40"
+                : "border-slate-200 hover:border-indigo-200"
+            }`}>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-indigo-600 truncate">{r.title || domain}</span>
-                <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 bg-emerald-50 text-emerald-700 rounded-full">
-                  {Math.round(r.score * 100)}%
-                </span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {r.belowThreshold && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 bg-amber-100 text-amber-700 rounded-full">
+                      low confidence
+                    </span>
+                  )}
+                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                    r.belowThreshold
+                      ? "bg-amber-50 text-amber-600"
+                      : "bg-emerald-50 text-emerald-700"
+                  }`}>
+                    {Math.round(r.score * 100)}%
+                  </span>
+                </div>
               </div>
               <p className="text-[10px] text-slate-400">{domain}</p>
               <p className="text-xs text-slate-600 leading-relaxed">{r.chunk}</p>

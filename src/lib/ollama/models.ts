@@ -11,5 +11,5 @@ export const CHAT_MODEL = getEnv("CHAT_MODEL", DEFAULT_CHAT_MODEL)
 export const EMBED_MODEL = getEnv("EMBED_MODEL", DEFAULT_EMBED_MODEL)
 
 export const MAX_CONTEXT_CHUNKS = parseInt(getEnv("MAX_CONTEXT_CHUNKS", "5"), 10)
-export const SIMILARITY_THRESHOLD = parseFloat(getEnv("SIMILARITY_THRESHOLD", "0.75"))
+export const SIMILARITY_THRESHOLD = parseFloat(getEnv("SIMILARITY_THRESHOLD", "0.45"))
 export const PAGE_TEXT_MAX_CHARS = parseInt(getEnv("PAGE_TEXT_MAX_CHARS", "6000"), 10)

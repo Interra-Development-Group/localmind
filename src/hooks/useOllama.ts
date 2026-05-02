@@ -1,9 +1,10 @@
-// ─── Ollama Chat Hook ─────────────────────────────────────────────────────────
-// Handles chat interactions with Ollama via the background worker
-
 import { useState, useRef, useEffect } from "react"
 import type { ChatMessage } from "~/types/chat"
 import type { MCPToolSchema } from "~/types/messages"
+
+const MODEL_KEY = "selectedChatModel"
+const EMBED_PATTERNS = ["embed", "minilm", "arctic-embed", "e5-"]
+const isEmbedModel = (n: string) => EMBED_PATTERNS.some((p) => n.toLowerCase().includes(p))
 
 export interface ChatState {
   messages: ChatMessage[]
@@ -20,6 +21,7 @@ export interface UseOllamaReturn {
   setModel: (model: string) => void
   availableModels: string[]
   error: string | null
+  modelAutoChanged: boolean
 }
 
 export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn {
@@ -31,45 +33,54 @@ export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn
   })
 
   const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [modelAutoChanged, setModelAutoChanged] = useState(false)
   const portRef = useRef<chrome.runtime.Port | null>(null)
   const abortControllerRef = useRef<AbortController | null>(null)
 
-  // Check health on mount
   useEffect(() => {
     checkHealth()
     return () => {
-      if (portRef.current) {
-        portRef.current.disconnect()
-      }
+      portRef.current?.disconnect()
     }
   }, [])
 
   async function checkHealth() {
     try {
-      const result = await new Promise<unknown>((resolve, reject) => {
-        chrome.runtime.sendMessage({ type: "GET_HEALTH" }, (response: any) => {
-          if (chrome.runtime.lastError) {
-            reject(chrome.runtime.lastError)
-          } else {
-            resolve(response)
-          }
+      const [healthResult, storedModel] = await Promise.all([
+        new Promise<unknown>((resolve, reject) => {
+          chrome.runtime.sendMessage({ type: "GET_HEALTH" }, (response: any) => {
+            if (chrome.runtime.lastError) reject(chrome.runtime.lastError)
+            else resolve(response)
+          })
+        }),
+        new Promise<string | undefined>((resolve) => {
+          chrome.storage.local.get(MODEL_KEY, (r) => resolve(r[MODEL_KEY] as string | undefined))
         })
-      })
+      ])
 
-      if (result && typeof result === "object" && "ollamaModels" in result) {
-        const models = (result as any).ollamaModels as string[]
+      if (healthResult && typeof healthResult === "object" && "ollamaModels" in healthResult) {
+        const models = (healthResult as any).ollamaModels as string[]
         if (models.length > 0) {
           setAvailableModels(models)
-          const EMBED_PATTERNS = ["embed", "minilm", "arctic-embed", "e5-"]
-          const isEmbed = (n: string) => EMBED_PATTERNS.some((p) => n.toLowerCase().includes(p))
-          const chatModels = models.filter((m) => !isEmbed(m))
-          // Auto-correct: keep current selection only if it's a real chat model that's installed
-          setState((prev) => ({
-            ...prev,
-            model: (!isEmbed(prev.model) && models.includes(prev.model))
-              ? prev.model
-              : (chatModels[0] ?? models[0])
-          }))
+          const chatModels = models.filter((m) => !isEmbedModel(m))
+
+          // Use saved model if it's still a valid chat model
+          const savedIsValid = storedModel && !isEmbedModel(storedModel) && models.includes(storedModel)
+
+          if (savedIsValid) {
+            setState((prev) => ({ ...prev, model: storedModel! }))
+          } else {
+            const autoModel = chatModels[0] ?? models[0]
+            setState((prev) => ({ ...prev, model: autoModel }))
+            chrome.storage.local.set({ [MODEL_KEY]: autoModel })
+
+            // Saved model existed but is no longer available — flash the selector
+            if (storedModel && !models.includes(storedModel)) {
+              console.log(`[Model] Saved model "${storedModel}" no longer available, switched to "${autoModel}"`)
+              setModelAutoChanged(true)
+              setTimeout(() => setModelAutoChanged(false), 3500)
+            }
+          }
         }
       }
     } catch {
@@ -80,7 +91,6 @@ export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn
   async function send(message: string, pageContext?: string): Promise<void> {
     if (state.isStreaming) return
 
-    // Add user message
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       role: "user",
@@ -95,23 +105,15 @@ export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn
       error: null
     }))
 
-    // Create port for streaming
     const port = chrome.runtime.connect({ name: "sidekick" })
     portRef.current = port
-
     abortControllerRef.current = new AbortController()
 
     port.postMessage({
       type: "CHAT",
-      payload: {
-        messages: [userMsg],
-        pageContext,
-        availableTools,
-        model: state.model
-      }
+      payload: { messages: [userMsg], pageContext, availableTools, model: state.model }
     })
 
-    // Listen for responses
     let accumulatedContent = ""
 
     port.onMessage.addListener((msg) => {
@@ -119,48 +121,43 @@ export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn
         const { token, done } = msg.payload
 
         if (done) {
-          if (accumulatedContent) {
+          // Capture before clearing — setState updaters are deferred in React 18
+          // concurrent mode, so reading accumulatedContent inside the callback
+          // would see "" if we cleared it first.
+          const finalContent = accumulatedContent
+          accumulatedContent = ""
+          port.disconnect()
+          portRef.current = null
+
+          if (finalContent) {
             setState((prev) => {
               const msgs = [...prev.messages]
               const last = msgs[msgs.length - 1]
-              // Replace the streaming placeholder in place rather than appending a duplicate
               if (last?.role === "assistant") {
-                msgs[msgs.length - 1] = { ...last, content: accumulatedContent }
+                msgs[msgs.length - 1] = { ...last, content: finalContent }
               } else {
-                msgs.push({ id: `assistant-${Date.now()}`, role: "assistant", content: accumulatedContent, timestamp: Date.now() })
+                msgs.push({ id: `assistant-${Date.now()}`, role: "assistant", content: finalContent, timestamp: Date.now() })
               }
               return { ...prev, messages: msgs, isStreaming: false }
             })
           } else {
             setState((prev) => ({ ...prev, isStreaming: false }))
           }
-          accumulatedContent = ""
-          port.disconnect()
-          portRef.current = null
         } else {
           accumulatedContent += token
-          // Update with partial content for streaming effect
+          const snapshot = accumulatedContent  // capture before next async tick
           setState((prev) => {
-            const updatedMessages = [...prev.messages]
-            if (updatedMessages.length > 0 && updatedMessages[updatedMessages.length - 1].role === "assistant") {
-              updatedMessages[updatedMessages.length - 1].content = accumulatedContent
+            const msgs = [...prev.messages]
+            if (msgs.length > 0 && msgs[msgs.length - 1].role === "assistant") {
+              msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], content: snapshot }
             } else {
-              updatedMessages.push({
-                id: `assistant-${Date.now()}-stream`,
-                role: "assistant",
-                content: accumulatedContent,
-                timestamp: Date.now()
-              })
+              msgs.push({ id: `assistant-${Date.now()}-stream`, role: "assistant", content: snapshot, timestamp: Date.now() })
             }
-            return { ...prev, messages: updatedMessages }
+            return { ...prev, messages: msgs }
           })
         }
       } else if (msg.type === "CHAT_ERROR") {
-        setState((prev) => ({
-          ...prev,
-          isStreaming: false,
-          error: msg.payload.message
-        }))
+        setState((prev) => ({ ...prev, isStreaming: false, error: msg.payload.message }))
         port.disconnect()
         portRef.current = null
       }
@@ -177,16 +174,12 @@ export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn
   }
 
   function clear(): void {
-    setState({
-      messages: [],
-      isStreaming: false,
-      error: null,
-      model: state.model
-    })
+    setState({ messages: [], isStreaming: false, error: null, model: state.model })
   }
 
   function setModel(model: string): void {
     setState((prev) => ({ ...prev, model }))
+    chrome.storage.local.set({ [MODEL_KEY]: model })
   }
 
   return {
@@ -196,6 +189,7 @@ export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn
     clear,
     setModel,
     availableModels: availableModels.length > 0 ? availableModels : [process.env.PLASMO_PUBLIC_CHAT_MODEL || "llama3.2"],
-    error: state.error
+    error: state.error,
+    modelAutoChanged
   }
 }

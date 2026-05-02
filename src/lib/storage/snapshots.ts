@@ -8,11 +8,10 @@ import { getDb } from "./db"
 
 export async function saveSnapshot(snapshot: PageSnapshot): Promise<void> {
   const db = await getDb()
-
-  await db.put("snapshots", {
-    ...snapshot,
-    crawledAt: Date.now()
-  })
+  const record = { ...snapshot, crawledAt: Date.now() }
+  console.log(`[Snapshots] Saving ${snapshot.url} — ${snapshot.wordCount} words, ${snapshot.chunks.length} chunks, ${snapshot.embeddings.length} embeddings${snapshot.summary ? ", has summary" : ""}`)
+  await db.put("snapshots", record)
+  console.log(`[Snapshots] Saved ${snapshot.url}`)
 }
 
 export async function getSnapshot(url: string): Promise<PageSnapshot | undefined> {

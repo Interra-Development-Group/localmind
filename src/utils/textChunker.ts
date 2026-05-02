@@ -12,54 +12,44 @@ export const textChunker = {
    */
   chunk(text: string, options: ChunkOptions): string[] {
     const { size, overlap } = options
+    if (!text || text.length === 0) return []
+    if (text.length <= size) return [text.trim()].filter(Boolean)
+
     const chunks: string[] = []
-
-    if (text.length <= size) {
-      return [text]
-    }
-
     let start = 0
+
     while (start < text.length) {
-      const end = start + size
-      const chunk = text.substring(start, end)
+      const end = Math.min(start + size, text.length)
+      const slice = text.substring(start, end)
 
-      // Try to break at a sentence boundary
-      const lastPeriod = chunk.lastIndexOf(". ")
-      const lastNewline = chunk.lastIndexOf("\n")
-
-      if (lastPeriod > size * 0.4) {
-        // Break at period within first 40% of chunk
-        const breakPoint = lastPeriod + 1
-        chunks.push(text.substring(start, breakPoint).trim())
-        start = breakPoint - overlap
-      } else if (lastNewline > size * 0.4) {
-        // Break at newline
-        const breakPoint = lastNewline + 1
-        chunks.push(text.substring(start, breakPoint).trim())
-        start = breakPoint - overlap
-      } else {
-        // Break at word boundary
-        const lastSpace = chunk.lastIndexOf(" ")
-        if (lastSpace > size * 0.3) {
-          const breakPoint = lastSpace + 1
-          chunks.push(text.substring(start, breakPoint).trim())
-          start = breakPoint - overlap
-        } else {
-          // Hard break
-          chunks.push(text.substring(start, end).trim())
-          start = end - overlap
-        }
-      }
-
-      // Prevent infinite loop
-      if (start < 0) start = 0
-      if (end >= text.length) {
-        const remaining = text.substring(start).trim()
-        if (remaining.length > 10) {
-          chunks.push(remaining)
-        }
+      if (end === text.length) {
+        const tail = slice.trim()
+        if (tail.length > 10) chunks.push(tail)
         break
       }
+
+      // Find the best natural break point within this slice
+      const lastPeriod = slice.lastIndexOf(". ")
+      const lastNewline = slice.lastIndexOf("\n")
+      const lastSpace = slice.lastIndexOf(" ")
+
+      let localBreak: number
+      if (lastPeriod > size * 0.4) {
+        localBreak = lastPeriod + 1
+      } else if (lastNewline > size * 0.4) {
+        localBreak = lastNewline + 1
+      } else if (lastSpace > size * 0.3) {
+        localBreak = lastSpace + 1
+      } else {
+        localBreak = slice.length
+      }
+
+      const absBreak = start + localBreak
+      const trimmed = text.substring(start, absBreak).trim()
+      if (trimmed.length > 0) chunks.push(trimmed)
+
+      // Always advance past the current start to prevent infinite loops
+      start = Math.max(start + 1, absBreak - overlap)
     }
 
     return chunks

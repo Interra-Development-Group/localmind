@@ -38,6 +38,7 @@ export async function healthCheck(): Promise<"connected" | "disconnected" | "cor
 // ─── List Available Models ────────────────────────────────────────────────────
 
 export async function listModels(): Promise<OllamaModel[]> {
+  console.log(`[Ollama] GET ${OLLAMA_BASE_URL}/api/tags`)
   const res = await fetch(`${OLLAMA_BASE_URL}/api/tags`)
 
   if (!res.ok) {
@@ -45,6 +46,7 @@ export async function listModels(): Promise<OllamaModel[]> {
   }
 
   const data: OllamaListModelsResponse = await res.json()
+  console.log(`[Ollama] Models: ${data.models.map((m) => m.name).join(", ")}`)
   return data.models
 }
 
@@ -141,6 +143,7 @@ export async function chat(
 
 export async function generateEmbeddings(model: string, inputs: string[]): Promise<number[][]> {
   const request: OllamaEmbedRequest = { model, input: inputs }
+  console.log(`[Ollama] POST /api/embed model=${model} inputs=${inputs.length}`)
 
   const res = await fetch(`${OLLAMA_BASE_URL}/api/embed`, {
     method: "POST",
@@ -150,10 +153,12 @@ export async function generateEmbeddings(model: string, inputs: string[]): Promi
 
   if (!res.ok) {
     const text = await res.text()
+    console.error(`[Ollama] /api/embed failed: ${res.status} ${text}`)
     throw new Error(`Ollama embeddings failed: ${res.status} ${text}`)
   }
 
   const data: OllamaEmbedResponse = await res.json()
+  console.log(`[Ollama] /api/embed returned ${data.embeddings.length} vectors`)
   return data.embeddings
 }
 

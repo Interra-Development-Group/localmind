@@ -24,7 +24,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("chat")
   const crawlPortRef = useRef<chrome.runtime.Port | null>(null)
 
-  const { state: ollamaState, send, clear, setModel, availableModels } = useOllama()
+  const { state: ollamaState, send, clear, setModel, availableModels, modelAutoChanged } = useOllama()
   const { content: pageContent, refresh: refreshPage } = usePageContent()
   const { state: favoritesState, addFavorite, removeFavorite } = useFavorites()
   const { state: mcpState } = useMCP()
@@ -75,7 +75,7 @@ export default function App() {
       const { url, status, message } = msg.payload
 
       if (status === "done" && url.startsWith("Done")) {
-        setCrawlStatus({ text: "Crawl complete", type: "done" })
+        setCrawlStatus({ text: message ? `Crawl done — ${message}` : "Crawl complete", type: "done" })
         setIsCrawling(false)
         port.disconnect()
         crawlPortRef.current = null
@@ -116,6 +116,7 @@ export default function App() {
           availableModels={availableModels}
           selectedModel={ollamaState.model}
           onSelect={setModel}
+          modelAutoChanged={modelAutoChanged}
         />
       </header>
 
