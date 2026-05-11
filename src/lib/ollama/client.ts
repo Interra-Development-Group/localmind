@@ -91,7 +91,6 @@ export async function* streamChat(
     for (const line of lines) {
       try {
         const data: OllamaChatResponse = JSON.parse(line)
-        if (data.message?.content?.includes?.("error")) throw new Error(data.message.content)
         yield data
       } catch {
         // skip malformed lines

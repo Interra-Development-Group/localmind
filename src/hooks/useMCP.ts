@@ -43,12 +43,12 @@ export function useMCP(): UseMCPReturn {
         })
       })
 
-      if (result && typeof result === "object" && "tools" in result) {
-        const data = result as any
+      if (result && typeof result === "object" && "payload" in result) {
+        const payload = (result as any).payload
         setState((prev) => ({
           ...prev,
-          tools: data.tools || [],
-          servers: data.serverStatuses || [],
+          tools: payload.tools || [],
+          servers: payload.serverStatuses || [],
           error: null
         }))
       }

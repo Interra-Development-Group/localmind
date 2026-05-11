@@ -5,6 +5,49 @@ import type { ChatMessage } from "~/types/chat"
 import { MessageBubble } from "./MessageBubble"
 import type { MCPToolSchema } from "~/types/messages"
 
+function ToolsDrawer({ tools }: { tools: MCPToolSchema[] }) {
+  const [open, setOpen] = useState(false)
+
+  if (tools.length === 0) return null
+
+  return (
+    <div className="border-t border-slate-100 shrink-0">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-slate-50 transition-colors"
+      >
+        <svg className="w-3 h-3 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M11 4a2 2 0 114 0v1a1 1 0 001 1h3a1 1 0 011 1v3a1 1 0 01-1 1h-1a2 2 0 100 4h1a1 1 0 011 1v3a1 1 0 01-1 1h-3a1 1 0 01-1-1v-1a2 2 0 10-4 0v1a1 1 0 01-1 1H7a1 1 0 01-1-1v-3a1 1 0 00-1-1H4a2 2 0 110-4h1a1 1 0 001-1V7a1 1 0 011-1h3a1 1 0 001-1V4z" />
+        </svg>
+        <span className="text-[11px] font-medium text-slate-500 flex-1">
+          {tools.length} tool{tools.length !== 1 ? "s" : ""} available
+        </span>
+        <svg
+          className={`w-3 h-3 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <ul className="max-h-40 overflow-y-auto divide-y divide-slate-50 bg-slate-50">
+          {tools.map((tool) => (
+            <li key={tool.name} className="px-3 py-2">
+              <p className="text-[11px] font-semibold text-indigo-700 font-mono">{tool.name}</p>
+              {tool.description && (
+                <p className="text-[10px] text-slate-500 mt-0.5 leading-relaxed">{tool.description}</p>
+              )}
+              <p className="text-[10px] text-slate-400 mt-0.5">{tool.serverUrl}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 interface ChatPanelProps {
   messages: ChatMessage[]
   onSend: (message: string, pageContext?: string) => void
@@ -95,6 +138,8 @@ export function ChatPanel({
           <p className="text-xs text-red-700 leading-relaxed">{error}</p>
         </div>
       )}
+
+      <ToolsDrawer tools={availableTools} />
 
       {/* Input */}
       <div className="px-3 pb-3 pt-2 bg-white border-t border-slate-200 shrink-0">

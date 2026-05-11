@@ -68,7 +68,7 @@ export default function OptionsPage() {
   // ── Ollama URL ──────────────────────────────────────────────────────────────
   const [ollamaUrl, setOllamaUrl] = useState(DEFAULT_OLLAMA_URL)
   const [urlSaved, setUrlSaved] = useState(false)
-  const [urlStatus, setUrlStatus] = useState<"idle" | "testing" | "ok" | "error">("idle")
+  const [urlStatus, setUrlStatus] = useState<"idle" | "testing" | "ok" | "cors" | "error">("idle")
 
   // ── Crawl interval ──────────────────────────────────────────────────────────
   const [crawlInterval, setCrawlInterval] = useState(1440)
@@ -159,7 +159,8 @@ export default function OptionsPage() {
     setUrlStatus("testing")
     try {
       const res = await fetch(`${ollamaUrl}/api/tags`, { method: "HEAD" })
-      setUrlStatus(res.ok || res.status === 403 ? "ok" : "error")
+      if (res.status === 403) setUrlStatus("cors")
+      else setUrlStatus(res.ok ? "ok" : "error")
     } catch {
       setUrlStatus("error")
     }
@@ -216,17 +217,24 @@ export default function OptionsPage() {
     setMcpServers((prev) => [...prev, { url, status: "connecting" }])
     setNewServerUrl("")
 
-    const ok = await new Promise<boolean>((resolve) => {
-      chrome.runtime.sendMessage({ type: "ADD_MCP_SERVER", payload: { url } }, (_r) => {
-        resolve(!chrome.runtime.lastError)
+    const result = await new Promise<{ ok: boolean; error?: string }>((resolve) => {
+      chrome.runtime.sendMessage({ type: "ADD_MCP_SERVER", payload: { url } }, (r) => {
+        if (chrome.runtime.lastError) {
+          resolve({ ok: false, error: chrome.runtime.lastError.message })
+        } else if (r?.error) {
+          resolve({ ok: false, error: r.error })
+        } else {
+          resolve({ ok: true })
+        }
       })
     })
 
     setMcpServers((prev) =>
-      prev.map((s) => s.url === url ? { ...s, status: ok ? "connected" : "error" } : s)
+      prev.map((s) => s.url === url ? { ...s, status: result.ok ? "connected" : "error" } : s)
     )
-    setMcpStatus(ok ? `Connected to ${url}` : `Could not connect to ${url}`)
-    setTimeout(() => setMcpStatus(null), 3000)
+    if (!result.ok) setMcpServers((prev) => prev.filter((s) => s.url !== url))
+    setMcpStatus(result.ok ? `Connected to ${url}` : (result.error ?? `Could not connect to ${url}`))
+    setTimeout(() => setMcpStatus(null), 5000)
   }
 
   async function removeMcpServer(url: string) {
@@ -268,7 +276,7 @@ export default function OptionsPage() {
             disabled={urlStatus === "testing"}
             className="px-3 py-2 text-sm border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-50 transition-colors"
           >
-            {urlStatus === "testing" ? "Testing…" : urlStatus === "ok" ? "✓ Connected" : urlStatus === "error" ? "✗ Failed" : "Test"}
+            {urlStatus === "testing" ? "Testing…" : urlStatus === "ok" ? "✓ Connected" : urlStatus === "cors" ? "✗ CORS error" : urlStatus === "error" ? "✗ Not reachable" : "Test"}
           </button>
           <button
             onClick={saveOllamaUrl}
@@ -396,6 +404,110 @@ export default function OptionsPage() {
             MCP documentation
           </a>{" "}
           for setup instructions.
+        </p>
+      </section>
+
+      {/* ── About ─────────────────────────────────────────────── */}
+      <section className="space-y-5 border-t border-slate-200 pt-8">
+
+        {/* Extension blurb */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-xl leading-none">🦙</span>
+            <h2 className="text-base font-bold text-slate-900">Ollama Sidekick</h2>
+          </div>
+          <p className="text-sm text-slate-600 leading-relaxed">
+            A Chrome extension that connects your browser to a local Ollama instance — giving you a
+            private AI assistant, a personal web index, and a chat interface that never touches a cloud.
+          </p>
+          <ul className="space-y-1 text-sm text-slate-500">
+            {[
+              ["Local inference", "Routes requests directly to your running Ollama instance. No API keys. No subscriptions."],
+              ["Personal web index", "Crawl and search the pages that matter to you — privately, on your own machine."],
+              ["Zero data egress", "Your conversations, your index, your models. Nothing leaves."],
+            ].map(([label, desc]) => (
+              <li key={label} className="flex gap-2">
+                <span className="text-indigo-400 shrink-0">·</span>
+                <span><span className="font-medium text-slate-700">{label}</span> — {desc}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Built by */}
+        <div className="bg-slate-50 rounded-xl p-4 space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Built by</p>
+          <p className="text-sm font-semibold text-slate-800">Tony Piazza</p>
+          <p className="text-sm text-slate-600 leading-relaxed">
+            Software architect with over 30 years of experience. Ollama Sidekick
+            grew out of work building local-first AI tooling and MCP integrations — a practical tool
+            for anyone who wants powerful AI assistance without surrendering their data to the cloud.
+          </p>
+          <div className="flex flex-wrap gap-3 pt-1">
+            {[
+              { label: "LinkedIn", href: "https://www.linkedin.com/in/tony-piazza-a3034b5/" },
+              { label: "frogteam.ai", href: "https://frogteam.ai" },
+              { label: "spiderink.net", href: "https://spiderink.net" },
+              { label: "Etsy shop", href: "https://www.etsy.com/shop/VibrantHangs" },
+              { label: "Instagram", href: "https://www.instagram.com/reddoverises/" },
+            ].map(({ label, href }) => (
+              <a
+                key={label}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:underline transition-colors"
+              >
+                {label} ↗
+              </a>
+            ))}
+          </div>
+        </div>
+
+        {/* Apps */}
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Other apps</p>
+          <div className="space-y-2">
+            {[
+              {
+                name: "Vibrant Frog Collab",
+                tagline: "AI writing assistant — a collaborator, not a ghost writer",
+                href: "https://apps.apple.com/us/app/vibrant-frog-collab/id6756248063",
+              },
+              {
+                name: "SimpleKeysVoice",
+                tagline: "Communication helper for people with difficulty speaking · iPad",
+                href: "https://apps.apple.com/us/app/simplekeysvoice/id6761789259",
+              },
+              {
+                name: "Tomorrow Box",
+                tagline: "Worried tonight? Record it and deal with it tomorrow",
+                href: "https://apps.apple.com/us/app/tomorrow-box/id6757824258",
+              },
+            ].map(({ name, tagline, href }) => (
+              <a
+                key={name}
+                href={href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-start justify-between gap-3 p-3 rounded-lg border border-slate-200
+                  hover:border-indigo-200 hover:bg-indigo-50/40 transition-colors group"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-800 group-hover:text-indigo-700 transition-colors">
+                    {name}
+                  </p>
+                  <p className="text-xs text-slate-500 mt-0.5">{tagline}</p>
+                </div>
+                <span className="text-slate-300 group-hover:text-indigo-400 shrink-0 text-sm transition-colors">↗</span>
+              </a>
+            ))}
+          </div>
+        </div>
+
+        <p className="text-xs text-slate-400 text-center pb-2">
+          Ollama Sidekick is built for people who believe your AI assistant should work for you —
+          not report back to someone else.
         </p>
       </section>
     </div>

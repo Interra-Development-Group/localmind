@@ -185,23 +185,6 @@ chrome.runtime.onMessage.addListener(
 
 async function handleMessage(msg: ExtensionMessage): Promise<unknown> {
   switch (msg.type) {
-    case "GET_PAGE_CONTENT": {
-      // This is handled by content script, but background can also answer
-      // if sender is a content script
-      const sender = msg as any
-      if (sender && "tab" in sender && sender.tab?.id) {
-        try {
-          const content = await chrome.tabs.sendMessage(sender.tab.id, {
-            type: "GET_PAGE_CONTENT"
-          } as ExtensionMessage)
-          return { type: "PAGE_CONTENT_RESPONSE", payload: content }
-        } catch (err) {
-          return { type: "PAGE_CONTENT_RESPONSE", payload: { url: "", title: "", text: "", selection: "" } }
-        }
-      }
-      return { type: "PAGE_CONTENT_RESPONSE", payload: { url: "", title: "", text: "", selection: "" } }
-    }
-
     case "GET_HEALTH":
       return buildHealthStatus()
 
@@ -221,6 +204,15 @@ async function handleMessage(msg: ExtensionMessage): Promise<unknown> {
     case "UPDATE_FAVORITE": {
       const updated = await updateFavorite(msg.payload.url, { crawl: msg.payload.crawl })
       return updated ? { type: "FAVORITE_UPDATED", payload: updated } : null
+    }
+
+    case "LIST_MCP_TOOLS": {
+      try {
+        const { tools } = await getAllTools()
+        return { type: "MCP_TOOLS_RESPONSE", payload: { tools } }
+      } catch {
+        return { type: "MCP_TOOLS_RESPONSE", payload: { tools: [] } }
+      }
     }
 
     case "LIST_MCP_SERVERS":
@@ -262,6 +254,15 @@ async function handleChat(
 
   if (pageContext) {
     systemParts.push(`\n--- CURRENT PAGE CONTENT ---\n${pageContext}\n--- END PAGE CONTENT ---`)
+  }
+
+  // List available tools in the system prompt so the model can answer
+  // questions about them and knows when to invoke them.
+  if (availableTools.length > 0) {
+    const toolList = availableTools
+      .map((t) => `- ${t.name}: ${t.description}`)
+      .join("\n")
+    systemParts.push(`\n--- AVAILABLE TOOLS ---\nYou have the following tools available. Use them when appropriate, or describe them if the user asks:\n${toolList}\n--- END AVAILABLE TOOLS ---`)
   }
 
   // Semantic search over the knowledge base and inject top matching chunks
@@ -321,7 +322,9 @@ async function handleChat(
       if (chunk.done && chunk.message?.tool_calls) {
         pendingToolCalls = chunk.message.tool_calls.map((tc) => ({
           name: tc.function.name,
-          args: JSON.parse(tc.function.arguments)
+          args: typeof tc.function.arguments === "string"
+            ? JSON.parse(tc.function.arguments)
+            : tc.function.arguments
         }))
       }
     }
@@ -402,23 +405,3 @@ async function buildHealthStatus(): Promise<HealthStatus> {
   }
 }
 
-// ─── Content script messaging handler ─────────────────────────────────────────
-
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === "GET_PAGE_CONTENT") {
-    // Handle content script page content requests
-    if (sender && "tab" in sender && sender.tab?.id) {
-      chrome.tabs.sendMessage(sender.tab.id, { type: "GET_PAGE_CONTENT" } as ExtensionMessage)
-        .then((response) => {
-          if (response && "payload" in response) {
-            sendResponse({ type: "PAGE_CONTENT_RESPONSE", payload: response.payload })
-          }
-        })
-        .catch(() => {
-          sendResponse({ type: "PAGE_CONTENT_RESPONSE", payload: { url: "", title: "", text: "", selection: "" } })
-        })
-      return true
-    }
-  }
-  return false
-})

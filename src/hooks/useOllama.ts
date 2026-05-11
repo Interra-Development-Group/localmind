@@ -6,11 +6,14 @@ const MODEL_KEY = "selectedChatModel"
 const EMBED_PATTERNS = ["embed", "minilm", "arctic-embed", "e5-"]
 const isEmbedModel = (n: string) => EMBED_PATTERNS.some((p) => n.toLowerCase().includes(p))
 
+export type OllamaHealthStatus = "connected" | "disconnected" | "cors_error" | "not_found" | null
+
 export interface ChatState {
   messages: ChatMessage[]
   isStreaming: boolean
   error: string | null
   model: string
+  healthStatus: OllamaHealthStatus
 }
 
 export interface UseOllamaReturn {
@@ -22,6 +25,7 @@ export interface UseOllamaReturn {
   availableModels: string[]
   error: string | null
   modelAutoChanged: boolean
+  recheckHealth: () => Promise<void>
 }
 
 export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn {
@@ -29,13 +33,13 @@ export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn
     messages: [],
     isStreaming: false,
     error: null,
-    model: process.env.PLASMO_PUBLIC_CHAT_MODEL || "llama3.2"
+    model: process.env.PLASMO_PUBLIC_CHAT_MODEL || "llama3.2",
+    healthStatus: null
   })
 
   const [availableModels, setAvailableModels] = useState<string[]>([])
   const [modelAutoChanged, setModelAutoChanged] = useState(false)
   const portRef = useRef<chrome.runtime.Port | null>(null)
-  const abortControllerRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     checkHealth()
@@ -59,12 +63,14 @@ export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn
       ])
 
       if (healthResult && typeof healthResult === "object" && "ollamaModels" in healthResult) {
-        const models = (healthResult as any).ollamaModels as string[]
+        const result = healthResult as { ollama: OllamaHealthStatus; ollamaModels: string[] }
+        setState((prev) => ({ ...prev, healthStatus: result.ollama }))
+
+        const models = result.ollamaModels
         if (models.length > 0) {
           setAvailableModels(models)
           const chatModels = models.filter((m) => !isEmbedModel(m))
 
-          // Use saved model if it's still a valid chat model
           const savedIsValid = storedModel && !isEmbedModel(storedModel) && models.includes(storedModel)
 
           if (savedIsValid) {
@@ -74,7 +80,6 @@ export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn
             setState((prev) => ({ ...prev, model: autoModel }))
             chrome.storage.local.set({ [MODEL_KEY]: autoModel })
 
-            // Saved model existed but is no longer available — flash the selector
             if (storedModel && !models.includes(storedModel)) {
               console.log(`[Model] Saved model "${storedModel}" no longer available, switched to "${autoModel}"`)
               setModelAutoChanged(true)
@@ -84,7 +89,7 @@ export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn
         }
       }
     } catch {
-      // Leave availableModels empty — ModelSelector falls back to selectedModel
+      setState((prev) => ({ ...prev, healthStatus: "disconnected" }))
     }
   }
 
@@ -107,7 +112,6 @@ export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn
 
     const port = chrome.runtime.connect({ name: "sidekick" })
     portRef.current = port
-    abortControllerRef.current = new AbortController()
 
     // Send full conversation history so the model has context from prior turns.
     // Filter out system messages — the background rebuilds the system prompt itself.
@@ -168,7 +172,6 @@ export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn
   }
 
   function stop(): void {
-    abortControllerRef.current?.abort()
     if (portRef.current) {
       portRef.current.disconnect()
       portRef.current = null
@@ -193,6 +196,7 @@ export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn
     setModel,
     availableModels: availableModels.length > 0 ? availableModels : [process.env.PLASMO_PUBLIC_CHAT_MODEL || "llama3.2"],
     error: state.error,
-    modelAutoChanged
+    modelAutoChanged,
+    recheckHealth: checkHealth
   }
 }

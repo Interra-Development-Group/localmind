@@ -30,10 +30,17 @@ async function saveServers(servers: string[]): Promise<void> {
 
 export async function addMcpServer(url: string): Promise<void> {
   const servers = await getRegisteredServers()
-  if (!servers.includes(url)) {
-    servers.push(url)
-    await saveServers(servers)
+  if (servers.includes(url)) return
+
+  // Verify the server speaks MCP before saving
+  const client = new MCPClient(url)
+  const reachable = await client.ping()
+  if (!reachable) {
+    throw new Error(`Could not connect to MCP server at ${url}. Check the URL and that the server is running.`)
   }
+
+  servers.push(url)
+  await saveServers(servers)
 }
 
 export async function removeMcpServer(url: string): Promise<void> {

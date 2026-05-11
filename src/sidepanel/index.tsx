@@ -8,6 +8,7 @@ import { FavoritesPanel } from "~/components/FavoritesPanel"
 import { PageContext } from "~/components/PageContext"
 import { SearchPanel } from "~/components/SearchPanel"
 import { KnowledgePanel } from "~/components/KnowledgePanel"
+import { SetupGuide } from "~/components/SetupGuide"
 import { useOllama } from "~/hooks/useOllama"
 import { usePageContent } from "~/hooks/usePageContent"
 import { useFavorites } from "~/hooks/useFavorites"
@@ -24,10 +25,10 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("chat")
   const crawlPortRef = useRef<chrome.runtime.Port | null>(null)
 
-  const { state: ollamaState, send, clear, setModel, availableModels, modelAutoChanged } = useOllama()
+  const { state: mcpState } = useMCP()
+  const { state: ollamaState, send, clear, setModel, availableModels, modelAutoChanged, recheckHealth } = useOllama(mcpState.tools)
   const { content: pageContent, refresh: refreshPage } = usePageContent()
   const { state: favoritesState, addFavorite, removeFavorite, toggleCrawl } = useFavorites()
-  const { state: mcpState } = useMCP()
 
   // Auto-fetch page content on mount and tab changes
   useEffect(() => {
@@ -44,14 +45,6 @@ export default function App() {
   useEffect(() => {
     if (pageContent) setPageContext(pageContent)
   }, [pageContent])
-
-  useEffect(() => {
-    const handler = (msg: any) => {
-      if (msg.type === "PAGE_CONTENT_RESPONSE") setPageContext(msg.payload)
-    }
-    chrome.runtime.onMessage.addListener(handler)
-    return () => chrome.runtime.onMessage.removeListener(handler)
-  }, [])
 
   // Auto-dismiss "done" status after 4s
   useEffect(() => {
@@ -192,8 +185,14 @@ export default function App() {
       )}
 
       {/* ── Tab content (fills remaining space) ────────────── */}
-      <div className="flex-1 overflow-hidden">
-        {activeTab === "chat" && (
+      <div className="flex-1 overflow-hidden flex flex-col">
+        {activeTab === "chat" && ollamaState.healthStatus !== null && ollamaState.healthStatus !== "connected" ? (
+          <SetupGuide
+            status={ollamaState.healthStatus}
+            models={availableModels}
+            onRetry={recheckHealth}
+          />
+        ) : activeTab === "chat" ? (
           <ChatPanel
             messages={ollamaState.messages}
             onSend={send}
@@ -203,9 +202,11 @@ export default function App() {
             onClear={clear}
             availableTools={mcpState.tools}
           />
+        ) : activeTab === "search" ? (
+          <SearchPanel />
+        ) : (
+          <KnowledgePanel />
         )}
-        {activeTab === "search" && <SearchPanel />}
-        {activeTab === "knowledge" && <KnowledgePanel />}
       </div>
 
       {/* ── Status bar ─────────────────────────────────────── */}
