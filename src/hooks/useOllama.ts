@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react"
 import type { ChatMessage } from "~/types/chat"
 import type { MCPToolSchema } from "~/types/messages"
+import { log } from "~/lib/utils/logger"
 
 const MODEL_KEY = "selectedChatModel"
 const EMBED_PATTERNS = ["embed", "minilm", "arctic-embed", "e5-"]
@@ -81,7 +82,7 @@ export function useOllama(availableTools: MCPToolSchema[] = []): UseOllamaReturn
             chrome.storage.local.set({ [MODEL_KEY]: autoModel })
 
             if (storedModel && !models.includes(storedModel)) {
-              console.log(`[Model] Saved model "${storedModel}" no longer available, switched to "${autoModel}"`)
+              log(`[Model] Saved model "${storedModel}" no longer available, switched to "${autoModel}"`)
               setModelAutoChanged(true)
               setTimeout(() => setModelAutoChanged(false), 3500)
             }

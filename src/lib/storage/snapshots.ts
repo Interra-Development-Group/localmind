@@ -35,21 +35,3 @@ export async function clearAllSnapshots(): Promise<void> {
   await db.clear("snapshots")
 }
 
-// ─── Query Helpers ────────────────────────────────────────────────────────────
-
-export async function getSnapshotsByUrls(urls: string[]): Promise<PageSnapshot[]> {
-  const results: PageSnapshot[] = []
-
-  for (const url of urls) {
-    try {
-      const snapshot = await getSnapshot(url)
-      if (snapshot) {
-        results.push(snapshot)
-      }
-    } catch {
-      // Continue on individual errors
-    }
-  }
-
-  return results
-}

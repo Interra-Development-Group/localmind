@@ -98,23 +98,6 @@ export async function createSnapshotFromHtml(
   }
 }
 
-// ─── Parse HTML directly (for content script) ────────────────────────────────
-
-export function parsePageFromDocument(doc: Document): {
-  url: string
-  title: string
-  text: string
-} {
-  const text = domParser.extractTextFromDocument(doc)
-  const title = doc.title || new URL(location.href).hostname
-
-  return {
-    url: location.href,
-    title,
-    text
-  }
-}
-
 // ─── Link extraction ──────────────────────────────────────────────────────────
 
 // Extensions that are definitely not HTML pages
