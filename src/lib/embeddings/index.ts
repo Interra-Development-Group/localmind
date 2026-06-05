@@ -31,11 +31,3 @@ export async function generateChunkEmbeddings(chunks: string[]): Promise<number[
   return generateEmbeddings(EMBED_MODEL, chunks)
 }
 
-export async function generateEmbeddingsForText(text: string): Promise<number[][]> {
-  const chunkSize = 1000
-  const chunks: string[] = []
-  for (let i = 0; i < text.length; i += chunkSize) {
-    chunks.push(text.substring(i, i + chunkSize))
-  }
-  return generateChunkEmbeddings(chunks)
-}

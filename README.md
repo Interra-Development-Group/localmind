@@ -92,7 +92,7 @@ Click the **Favorites** bar below the page context area to expand it. Add the cu
 
 Once you have favorites saved:
 - Click **Crawl all** to immediately fetch and index all your saved pages.
-- Crawling also runs automatically in the background every 60 minutes.
+- Crawling also runs automatically in the background once per day by default. You can change the schedule (or disable auto-crawl) in **Settings**.
 - The extension follows links one level deep from each favorite (same domain only), so saving a site's homepage often picks up related pages automatically.
 
 > Pages that require you to be logged in won't crawl correctly — the background fetcher doesn't send your session cookies (by design, for privacy).
@@ -150,6 +150,9 @@ If a model you had selected is removed from Ollama, the selector will briefly fl
 ---
 
 ## Developer setup
+
+**Repository:** [github.com/SpiderInk/llm-extension](https://github.com/SpiderInk/llm-extension)
+
 
 ```bash
 npm install

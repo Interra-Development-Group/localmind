@@ -16,7 +16,6 @@ export interface UseMCPReturn {
   connectServer: (url: string) => Promise<void>
   disconnectServer: (url: string) => Promise<void>
   listServers: () => Promise<string[]>
-  callTool: (tool: MCPToolSchema, args: unknown) => Promise<unknown>
 }
 
 export function useMCP(): UseMCPReturn {
@@ -134,31 +133,10 @@ export function useMCP(): UseMCPReturn {
     }
   }
 
-  async function callTool(tool: MCPToolSchema, args: unknown): Promise<unknown> {
-    try {
-      const result = await new Promise<unknown>((resolve, reject) => {
-        chrome.runtime.sendMessage(
-          { type: "CALL_MCP_TOOL", payload: { server: tool.serverUrl, tool: tool.name, args } },
-          (_response: any) => {
-            if (chrome.runtime.lastError) {
-              reject(chrome.runtime.lastError)
-            } else {
-              resolve(_response)
-            }
-          }
-        )
-      })
-      return result
-    } catch (err) {
-      throw err
-    }
-  }
-
   return {
     state,
     connectServer,
     disconnectServer,
-    listServers,
-    callTool
+    listServers
   }
 }
