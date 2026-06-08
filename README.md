@@ -141,7 +141,7 @@ If a model you had selected is removed from Ollama, the selector will briefly fl
 - The crawler only fetches URLs you explicitly mark as favorites.
 - No analytics, telemetry, or tracking of any kind.
 
-For the full policy, see [the published privacy policy](https://interra-development-group.github.io/ollama-sidekick/privacy/).
+For the full policy, see [the published privacy policy](https://ollama-sidekick.interradevelopmentgroup.com/privacy/).
 
 ---
 

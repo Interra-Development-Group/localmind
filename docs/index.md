@@ -12,7 +12,7 @@ accounts, no subscriptions.
 ## Links
 
 - **[Source on GitHub](https://github.com/Interra-Development-Group/ollama-sidekick)** — code, issues, releases
-- **[Privacy Policy](/ollama-sidekick/privacy/)** — what we collect (nothing), what stays local (everything)
+- **[Privacy Policy](/privacy/)** — what we collect (nothing), what stays local (everything)
 - **[Chrome Web Store listing](https://chrome.google.com/webstore)** *(coming soon)*
 
 ## What it does
