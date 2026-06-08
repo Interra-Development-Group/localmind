@@ -8,8 +8,8 @@
 
 title: Ollama Sidekick by Interra
 description: Privacy-first local AI in your browser side panel — fully local inference, no telemetry.
-url: https://interra-development-group.github.io
-baseurl: /ollama-sidekick
+url: https://ollama-sidekick.interradevelopmentgroup.com
+baseurl: ""
 
 theme: jekyll-theme-cayman
 
